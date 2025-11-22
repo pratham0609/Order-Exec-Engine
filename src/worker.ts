@@ -77,9 +77,24 @@ const worker = new Worker(
       await persist({ status: "building" });
 
       const expectedOut = selected.price * order.amountIn;
+      // if (order.minAmountOut && expectedOut < order.minAmountOut) {
+      //   throw new Error("Slippage too high");
+      // }
+      // slippage protection check — treat as terminal failure (no retries)
+      const expectedOut = selected.price * order.amountIn;
       if (order.minAmountOut && expectedOut < order.minAmountOut) {
-        throw new Error("Slippage too high");
+        const errMsg = 'Slippage too high compared to minAmountOut';
+
+        // send a specific websocket status so clients can react
+        sendStatus(orderId, { status: 'slippage_failed', orderId, reason: errMsg, ts: new Date().toISOString() });
+            
+        // persist a failed state (do not rethrow — return to finish job without retriggering retries)
+        await persist({ status: 'failed', lastError: errMsg });
+            
+        // stop processing this job gracefully
+        return { error: errMsg };
       }
+
 
       sendStatus(orderId, { status: "submitted", orderId, dex: selected.dex });
       await persist({ status: "submitted" });
