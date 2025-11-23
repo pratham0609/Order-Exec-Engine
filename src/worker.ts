@@ -3,8 +3,8 @@ import { Worker, Job } from "bullmq";
 import { redis } from "./redis.js";
 import { db } from "./db.js";
 import { MockDexRouter } from "./mockDexRouter.js";
-import { sendStatus } from "./websocketManager.js";
-// import "dotenv/config";
+// removed sendStatus import; worker persists only
+// import { sendStatus } from "./websocketManager.js";
 
 const router = new MockDexRouter();
 
@@ -25,9 +25,8 @@ const worker = new Worker(
     const order = job.data as Order;
     const orderId = order.id;
 
-    // Persist helper using raw SQL
     const persist = async (patch: any) => {
-      console.log("DB PERSIST START:", patch); 
+      console.log("DB PERSIST START:", patch);
       await db.query(
         `INSERT INTO orders (
             id, token_in, token_out, amount_in, min_amount_out, type,
@@ -57,15 +56,17 @@ const worker = new Worker(
           patch.lastError ?? null,
         ]
       );
-      console.log("DB PERSIST SUCCESS"); 
+      console.log("DB PERSIST SUCCESS");
     };
 
-    try {
-      sendStatus(orderId, { status: "routing", orderId });
+    // New: write 'pending' as soon as job starts (worker only)
+    console.log(`[WORKER] status pending for ${orderId}`);
+    await persist({ status: "pending" });
 
+    try {
+      console.log(`[WORKER] status routing for ${orderId}`);
       await persist({ status: "routing" });
 
-      // Fetch quotes concurrently
       const [r, m] = await Promise.all([
         router.getRaydiumQuote(order.tokenIn, order.tokenOut, order.amountIn),
         router.getMeteoraQuote(order.tokenIn, order.tokenOut, order.amountIn),
@@ -73,55 +74,31 @@ const worker = new Worker(
 
       const selected = (r.price - r.fee) >= (m.price - m.fee) ? r : m;
 
-      sendStatus(orderId, { status: "building", orderId, selected });
+      console.log(`[WORKER] status building for ${orderId}`, { selected });
       await persist({ status: "building" });
 
-      // const expectedOut = selected.price * order.amountIn;
-      // if (order.minAmountOut && expectedOut < order.minAmountOut) {
-      //   throw new Error("Slippage too high");
-      // }
-      // slippage protection check — treat as terminal failure (no retries)
-
-      
-// FINAL CORRECTED SLIPPAGE CHECK
+      // slippage check (terminal failure, no retry)
       const expectedOut = selected.price * order.amountIn;
-          
       if (order.minAmountOut !== null && order.minAmountOut !== undefined) {
         if (expectedOut < order.minAmountOut) {
           const errMsg = "Slippage too high compared to minAmountOut";
-        
-          // Send real-time WS update
-          sendStatus(orderId, {
-            status: "slippage_failed",
-            orderId,
-            reason: errMsg,
-            ts: new Date().toISOString()
-          });
-        
-          // Persist failure
+          console.warn(`[WORKER] slippage failure for ${orderId}: ${errMsg}`);
+
           await persist({
             status: "failed",
-            lastError: errMsg
+            lastError: errMsg,
           });
-        
-          // Stop job gracefully (NO retries)
+
           return { error: errMsg };
         }
       }
 
-
-      sendStatus(orderId, { status: "submitted", orderId, dex: selected.dex });
+      console.log(`[WORKER] status submitted for ${orderId}`, { dex: selected.dex });
       await persist({ status: "submitted" });
 
       const exec = await router.executeSwap(selected.dex, order, selected.price);
 
-      sendStatus(orderId, {
-        status: "confirmed",
-        orderId,
-        txHash: exec.txHash,
-        executedPrice: exec.executedPrice,
-      });
-
+      console.log(`[WORKER] status confirmed for ${orderId}`, { txHash: exec.txHash, executedPrice: exec.executedPrice });
       await persist({
         status: "confirmed",
         txHash: exec.txHash,
@@ -131,14 +108,12 @@ const worker = new Worker(
       return exec;
     } catch (err: any) {
       const lastError = err?.message ?? "Unknown Error";
-
-      sendStatus(orderId, { status: "failed", orderId, lastError });
+      console.error(`[WORKER] error for ${orderId}:`, lastError);
 
       await persist({
         status: "failed",
         lastError,
       });
-      console.error("WORKER ERROR:", err);
 
       throw err;
     }
@@ -148,8 +123,10 @@ const worker = new Worker(
     concurrency: 10,
   }
 );
+
 worker.on("failed", (job, err) => {
   console.error("JOB FAILED:", job?.id, err);
 });
+
 console.log("Worker running…");
 export default worker;
