@@ -3,6 +3,15 @@
 const WebSocket = require("ws");
 const fetch = require("node-fetch");
 
+const { startServer, stopServer } = require("../testServer.cjs");
+
+beforeAll(async () => {
+  await startServer();
+});
+
+afterAll(async () => {
+  await stopServer();
+});
 
 
 test("WebSocket upgrades successfully", async () => {

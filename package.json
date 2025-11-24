@@ -3,12 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "worker": "tsx watch src/worker.ts",
-    "start": "node src/server.ts",
-    "build": "tsc",
-    "test": "jest --runInBand"
+  "dev": "tsx watch src/server.ts",
+  "worker:dev": "tsx watch src/worker.ts",
+  "worker": "tsx watch src/worker.ts",
+
+  "build": "tsc",
+
+  "start": "node dist/server.js",
+  "start:worker": "node dist/worker.js",
+
+  "test": "jest --runInBand"
   },
+
+
   "dependencies": {
     "@fastify/static": "^6.12.0",
     "@fastify/websocket": "^8.1.0",

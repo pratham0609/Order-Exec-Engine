@@ -1,0 +1,9 @@
+app = "order-exec-worker"
+primary_region = "bom"
+
+[env]
+  NODE_ENV = "production"
+
+[processes]
+  worker = "node dist/worker.js"
+

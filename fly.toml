@@ -1,0 +1,26 @@
+app = "order-exec-web"
+primary_region = "bom"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+
+[[services]]
+  processes = ["app"]
+  protocol = "tcp"
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [services.concurrency]
+    type = "connections"
+    soft_limit = 500
+    hard_limit = 1000
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
