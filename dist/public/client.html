@@ -2,124 +2,144 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Order Execution Engine — Live Status</title>
+  <title>Order Execution Engine — POST → WebSocket Stream</title>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    input, select { padding: 6px; margin: 5px 0; width: 200px; }
-    button { padding: 8px 14px; margin-top: 8px; }
-    #log { 
-      white-space: pre-wrap; 
-      background: #f0f0f0; 
-      padding: 10px; 
-      height: 300px; 
-      overflow-y: auto; 
-      margin-top: 10px;
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 20px auto;
+      background: #fafafa;
+      padding: 20px;
+      border-radius: 10px;
     }
-    #latest {
-      background: #e8ffe8;
+    input, select {
+      padding: 8px;
+      margin: 5px 0 10px 0;
+      width: 100%;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
       padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      background: #0d6efd;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0b5ed7;
+    }
+    #logBox {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: white;
+      height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
       white-space: pre-wrap;
+      font-size: 14px;
+    }
+    .status-box {
+      background: #fff3cd;
+      padding: 10px;
+      border: 1px solid #ffeeba;
+      border-radius: 5px;
       margin-top: 10px;
+      font-weight: bold;
     }
   </style>
 </head>
 
 <body>
+  <h2>Order Execution Engine — POST → WebSocket Stream</h2>
 
-<h2>Order Execution Engine — POST → WebSocket Stream</h2>
+  <label>Token In</label>
+  <select id="tokenIn">
+    <option value="SOL">SOL</option>
+    <option value="USDC">USDC</option>
+    <option value="BONK">BONK</option>
+  </select>
 
-<div>
-  <label>Token In</label><br/>
-  <input id="tokenIn" value="SOL" />
-</div>
+  <label>Token Out</label>
+  <select id="tokenOut">
+    <option value="USDC">USDC</option>
+    <option value="SOL">SOL</option>
+  </select>
 
-<div>
-  <label>Token Out</label><br/>
-  <input id="tokenOut" value="USDC" />
-</div>
+  <label>Amount</label>
+  <input id="amount" type="number" value="5" />
 
-<div>
-  <label>Amount</label><br/>
-  <input id="amount" value="5" type="number" />
-</div>
+  <button onclick="submitOrder()">Submit & Stream</button>
 
-<button onclick="submitOrder()">Submit & Stream</button>
+  <div class="status-box" id="status">Status: idle</div>
 
-<h3>Status: <span id="status">idle</span></h3>
+  <h3>Event Stream:</h3>
+  <div id="logBox"></div>
 
-<h3>Latest Event</h3>
-<div id="latest">no data yet</div>
-
-<h3>Event Stream</h3>
-<div id="log"></div>
-
-<script>
-  let ws = null;
-
-  function log(msg) {
-    const logEl = document.getElementById("log");
-    const ts = new Date().toLocaleTimeString();
-    logEl.textContent += `[${ts}] ${msg}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-
-  function setStatus(s) {
-    document.getElementById("status").textContent = s;
-  }
-
-  async function submitOrder() {
-    const payload = {
-      tokenIn: document.getElementById("tokenIn").value,
-      tokenOut: document.getElementById("tokenOut").value,
-      amountIn: Number(document.getElementById("amount").value)
-    };
-
-    log("Submitting POST /api/orders/execute");
-    setStatus("submitting order...");
-
-    const res = await fetch("/api/orders/execute", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    const json = await res.json();
-    log("Order queued: " + JSON.stringify(json));
-
-    const wsUrl = `ws://${window.location.host}${json.ws_url}`;
-    connectWebSocket(wsUrl);
-  }
-
-  function connectWebSocket(url) {
-    log("Connecting WebSocket to: " + url);
-
-    if (ws) {
-      try { ws.close(); } catch {}
+  <script>
+    function log(msg) {
+      const box = document.getElementById("logBox");
+      const ts = new Date().toLocaleTimeString();
+      box.textContent += `[${ts}] ${msg}\n`;
+      box.scrollTop = box.scrollHeight;
     }
 
-    ws = new WebSocket(url);
+    function setStatus(text) {
+      document.getElementById("status").textContent = "Status: " + text;
+    }
 
-    ws.onopen = () => {
-      log("WS connected");
-      setStatus("connected");
-    };
+    async function submitOrder() {
+      setStatus("submitting order...");
+      log("Submitting POST /api/orders/execute");
 
-    ws.onmessage = (ev) => {
-      log("WS message: " + ev.data);
-      document.getElementById("latest").textContent = ev.data;
-    };
+      const body = {
+        type: "market",
+        tokenIn: document.getElementById("tokenIn").value,
+        tokenOut: document.getElementById("tokenOut").value,
+        amount: Number(document.getElementById("amount").value),
+      };
 
-    ws.onerror = () => {
-      log("WS error");
-    };
+      const res = await fetch("/api/orders/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    ws.onclose = () => {
-      log("WS closed");
-      setStatus("closed");
-    };
-  }
-</script>
+      const json = await res.json();
+      log("Order queued: " + JSON.stringify(json));
+
+      const orderId = json.orderId;
+
+      // ⭐ FIXED WEBSOCKET PROTOCOL FOR PRODUCTION
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${protocol}://${window.location.host}${json.ws_url}`;
+      log(`Connecting WebSocket to: ${wsUrl}`);
+
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        log("WebSocket opened");
+      };
+
+      ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        setStatus(data.status);
+        log("Event: " + JSON.stringify(data));
+      };
+
+      ws.onerror = () => {
+        log("❌ WebSocket error");
+      };
+
+      ws.onclose = () => {
+        log("WebSocket closed");
+      };
+    }
+  </script>
 
 </body>
 </html>
