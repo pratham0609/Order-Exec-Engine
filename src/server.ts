@@ -1,5 +1,4 @@
 // src/server.ts
-
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
@@ -15,30 +14,40 @@ import {
 } from "./websocketManager.js";
 import { db } from "./db.js";
 
-// --------------------------
-// Resolve __dirname safely
-// --------------------------
+// Proper dirname resolution
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --------------------------
-// Factory function for tests
-// --------------------------
+// ============================================
+// STATIC DIRECTORY SETUP (LOCAL + PRODUCTION)
+// ============================================
+const staticDir =
+  process.env.NODE_ENV === "production"
+    ? path.join(process.cwd(), "dist/public")
+    : path.join(process.cwd(), "public");
+
+// ============================================
+// FACTORY FUNCTION
+// ============================================
 export async function buildServer() {
   const fastify = Fastify({ logger: false });
 
-  // Register WS without top-level await
   await fastify.register(websocket);
 
-  // Static serving
-  await fastify.register(fastifyStatic, {
-    root: path.join(__dirname, "..", "static"),
-    prefix: "/static/",
+  // Serve static files
+  fastify.register(fastifyStatic, {
+    root: staticDir,
+    prefix: "/",
   });
 
-  // --------------------------
-  // Routes
-  // --------------------------
+  // Serve homepage → loads client.html
+  fastify.get("/", (req, reply) => {
+    reply.sendFile("client.html");
+  });
+
+  // ============================================
+  // ORDER EXECUTION ROUTE
+  // ============================================
   fastify.post("/api/orders/execute", async (req, reply) => {
     const order = await enqueueOrder(req.body as any);
 
@@ -49,16 +58,16 @@ export async function buildServer() {
     });
   });
 
+  // ============================================
+  // WebSocket Upgrade Route
+  // ============================================
   fastify.get(
     "/api/orders/upgrade/:orderId",
     { websocket: true },
     (connection, req) => {
       const { orderId } = req.params as { orderId: string };
 
-      if (!orderId) {
-        connection.socket.close();
-        return;
-      }
+      if (!orderId) return connection.socket.close();
 
       registerSocket(orderId, connection.socket);
 
@@ -77,50 +86,47 @@ export async function buildServer() {
       connection.socket.on("error", closeHandler);
 
       const pollAndSend = async () => {
-        try {
-          const res = await db.query(
-            `SELECT status, tx_hash, executed_price, last_error, attempts, updated_at
-             FROM orders WHERE id = $1 LIMIT 1`,
-            [orderId]
-          );
+        const res = await db.query(
+          `SELECT status, tx_hash, executed_price, last_error, attempts, updated_at
+           FROM orders WHERE id = $1 LIMIT 1`,
+          [orderId]
+        );
 
-          let payload: any;
-          if (res.rowCount === 0) {
-            payload = { status: "pending", orderId };
-          } else {
-            const r = res.rows[0];
-            payload = {
-              status: r.status,
-              orderId,
-              txHash: r.tx_hash ?? null,
-              executedPrice: r.executed_price ?? null,
-              lastError: r.last_error ?? null,
-              attempts: r.attempts ?? null,
-              updatedAt: r.updated_at ?? null,
-            };
-          }
+        let payload: any;
 
-          const payloadStr = JSON.stringify(payload);
-          if (payloadStr !== lastSent) {
-            lastSent = payloadStr;
-            sendStatus(orderId, payload);
-          }
-        } catch (err) {}
+        if (res.rowCount === 0) {
+          payload = { status: "pending", orderId };
+        } else {
+          const r = res.rows[0];
+          payload = {
+            status: r.status,
+            orderId,
+            txHash: r.tx_hash,
+            executedPrice: r.executed_price,
+            lastError: r.last_error,
+            attempts: r.attempts,
+            updatedAt: r.updated_at,
+          };
+        }
+
+        const content = JSON.stringify(payload);
+        if (content !== lastSent) {
+          lastSent = content;
+          sendStatus(orderId, payload);
+        }
       };
 
       void pollAndSend();
 
       const interval = setInterval(async () => {
-        if (stopped) return;
+        if (!stopped) {
+          await pollAndSend();
 
-        await pollAndSend();
-
-        if (lastSent) {
-          const parsed = JSON.parse(lastSent);
           if (
-            parsed.status === "confirmed" ||
-            parsed.status === "failed" ||
-            parsed.status === "slippage_failed"
+            lastSent &&
+            ["confirmed", "failed", "slippage_failed"].includes(
+              JSON.parse(lastSent).status
+            )
           ) {
             clearInterval(interval);
           }
@@ -132,15 +138,10 @@ export async function buildServer() {
   return fastify;
 }
 
-// --------------------------
-// Export a default instance for normal usage
-// --------------------------
+// Boot server if running directly
 const server = await buildServer();
 export default server;
 
-// --------------------------
-// Start server only when run directly
-// --------------------------
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server
     .listen({ port: 3000, host: "0.0.0.0" })

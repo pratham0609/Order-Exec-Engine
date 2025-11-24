@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Order Execution Engine — Live Status</title>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    input, select { padding: 6px; margin: 5px 0; width: 200px; }
+    button { padding: 8px 14px; margin-top: 8px; }
+    #log { 
+      white-space: pre-wrap; 
+      background: #f0f0f0; 
+      padding: 10px; 
+      height: 300px; 
+      overflow-y: auto; 
+      margin-top: 10px;
+    }
+    #latest {
+      background: #e8ffe8;
+      padding: 10px;
+      white-space: pre-wrap;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Order Execution Engine — POST → WebSocket Stream</h2>
+
+<div>
+  <label>Token In</label><br/>
+  <input id="tokenIn" value="SOL" />
+</div>
+
+<div>
+  <label>Token Out</label><br/>
+  <input id="tokenOut" value="USDC" />
+</div>
+
+<div>
+  <label>Amount</label><br/>
+  <input id="amount" value="5" type="number" />
+</div>
+
+<button onclick="submitOrder()">Submit & Stream</button>
+
+<h3>Status: <span id="status">idle</span></h3>
+
+<h3>Latest Event</h3>
+<div id="latest">no data yet</div>
+
+<h3>Event Stream</h3>
+<div id="log"></div>
+
+<script>
+  let ws = null;
+
+  function log(msg) {
+    const logEl = document.getElementById("log");
+    const ts = new Date().toLocaleTimeString();
+    logEl.textContent += `[${ts}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setStatus(s) {
+    document.getElementById("status").textContent = s;
+  }
+
+  async function submitOrder() {
+    const payload = {
+      tokenIn: document.getElementById("tokenIn").value,
+      tokenOut: document.getElementById("tokenOut").value,
+      amountIn: Number(document.getElementById("amount").value)
+    };
+
+    log("Submitting POST /api/orders/execute");
+    setStatus("submitting order...");
+
+    const res = await fetch("/api/orders/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json();
+    log("Order queued: " + JSON.stringify(json));
+
+    const wsUrl = `ws://${window.location.host}${json.ws_url}`;
+    connectWebSocket(wsUrl);
+  }
+
+  function connectWebSocket(url) {
+    log("Connecting WebSocket to: " + url);
+
+    if (ws) {
+      try { ws.close(); } catch {}
+    }
+
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      log("WS connected");
+      setStatus("connected");
+    };
+
+    ws.onmessage = (ev) => {
+      log("WS message: " + ev.data);
+      document.getElementById("latest").textContent = ev.data;
+    };
+
+    ws.onerror = () => {
+      log("WS error");
+    };
+
+    ws.onclose = () => {
+      log("WS closed");
+      setStatus("closed");
+    };
+  }
+</script>
+
+</body>
+</html>

@@ -6,15 +6,11 @@
   "dev": "tsx watch src/server.ts",
   "worker:dev": "tsx watch src/worker.ts",
   "worker": "tsx watch src/worker.ts",
-
-  "build": "tsc",
-
+  "build": "tsc && cp -r public dist/public",
   "start": "node dist/server.js",
   "start:worker": "node dist/worker.js",
-
   "test": "jest --runInBand"
   },
-
 
   "dependencies": {
     "@fastify/static": "^6.12.0",
