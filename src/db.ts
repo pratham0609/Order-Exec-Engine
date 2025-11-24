@@ -1,7 +1,5 @@
 // src/db.ts
-import pg from "pg";
-
-const { Pool } = pg;
+import { Pool } from "pg";
 
 export const db = new Pool({
   host: process.env.PG_HOST ?? "localhost",

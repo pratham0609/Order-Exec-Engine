@@ -1,0 +1,76 @@
+{
+  "info": {
+    "name": "Order Execution Engine API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "order-exec-engine"
+  },
+  "item": [
+    {
+      "name": "POST /api/orders/execute",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/orders/execute",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "orders",
+            "execute"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amountIn\": 5\n}"
+        }
+      }
+    },
+    {
+      "name": "GET /static/client.html",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3000/static/client.html",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "static",
+            "client.html"
+          ]
+        }
+      }
+    },
+    {
+      "name": "WebSocket /api/orders/upgrade/:orderId",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "ws://localhost:3000/api/orders/upgrade/{{orderId}}",
+          "protocol": "ws",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "orders",
+            "upgrade",
+            "{{orderId}}"
+          ]
+        }
+      }
+    }
+  ]
+}

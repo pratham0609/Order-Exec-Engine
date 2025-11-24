@@ -1,5 +1,5 @@
 // src/mockDexRouter.ts
-import { sleep } from "./utils.js";
+import { sleep } from "./utils";
 import { v4 as uuidv4 } from "uuid";
 
 export class MockDexRouter {
@@ -23,4 +23,8 @@ export class MockDexRouter {
     const executedPrice = simulatedPrice * (1 + (Math.random() - 0.5) * 0.001);
     return { txHash, executedPrice };
   }
+}
+
+export function createMockDexRouter() {
+  return new MockDexRouter();
 }

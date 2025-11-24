@@ -129,3 +129,48 @@ Writes lifecycle transitions to PostgreSQL
 ## WebSocket Manager
 
 Tracks which client socket belongs to which orderId.
+
+# Postman 
+
+## Example Body
+
+{
+  "tokenIn": "SOL",
+  "tokenOut": "USDC",
+  "amountIn": 5
+}
+
+## How to use
+
+Import the collection into Postman or Insomnia.
+
+Import the environment file (Order Exec Engine Local).
+
+Select the environment from the dropdown.
+
+Run the request POST /api/orders/execute:
+
+## Example body
+
+{
+  "tokenIn": "SOL",
+  "tokenOut": "USDC",
+  "amountIn": 5
+}
+
+## WebSocket Testing in Postman
+
+1. Click New → WebSocket Request
+
+2. Use:
+ws://localhost:3000/api/orders/upgrade/{{orderId}}
+
+3. Click Connect
+
+4. Submit the order again — you should see messages like:
+
+{"status":"pending", ...}
+{"status":"routing", ...}
+{"status":"building", ...}
+{"status":"submitted", ...}
+{"status":"confirmed", ...}

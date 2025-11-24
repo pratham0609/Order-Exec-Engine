@@ -1,5 +1,5 @@
 // src/producer.ts
-import { orderQueue } from "./queue.js";
+import { orderQueue } from "./queue";
 import { v4 as uuidv4 } from "uuid";
 
 export type CreateOrderPayload = {
