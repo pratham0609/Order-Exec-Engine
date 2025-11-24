@@ -1,8 +1,8 @@
 // src/worker.ts
 import { Worker, Job } from "bullmq";
-import { redis } from "./redis";
-import { db } from "./db";
-import { MockDexRouter } from "./mockDexRouter";
+import { redis } from "./redis.js";
+import { db } from "./db.js";
+import { MockDexRouter } from "./mockDexRouter.js";
 // removed sendStatus import; worker persists only
 // import { sendStatus } from "./websocketManager.js";
 

@@ -1,5 +1,5 @@
 // src/mockDexRouter.ts
-import { sleep } from "./utils";
+import { sleep } from "./utils.js";
 import { v4 as uuidv4 } from "uuid";
 
 export class MockDexRouter {
