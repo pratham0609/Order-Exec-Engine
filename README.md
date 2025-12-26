@@ -61,19 +61,8 @@ CREATE TABLE orders (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+```
 
-# Order Execution Engine
-
-This project implements a market-order execution backend with DEX routing, a BullMQ worker, PostgreSQL persistence, and a WebSocket status stream. The system is structured around a single entrypoint for creating an order and a dedicated WebSocket upgrade route for monitoring its lifecycle.
-
-The design matches the assignment requirement:
-- A POST endpoint enqueues the order and returns its `orderId`.
-- The client upgrades to a WebSocket connection tied to that `orderId`.
-- The server streams lifecycle updates until the order reaches a terminal state.
-
-## Features
-
-- Market Order execution
 - DEX routing between a mocked Raydium and Meteora router
 - Order lifecycle streaming over WebSocket
 - BullMQ queue with retry, backoff, and concurrency
@@ -82,7 +71,6 @@ The design matches the assignment requirement:
 - Fastify-based HTTP + WebSocket server
 - Minimal static HTML client to submit orders and watch updates
 
----
 
 # Running the System Locally
 
@@ -93,7 +81,7 @@ Create a database:
 
 ```bash
 createdb order_exec_engine
-
+```
 
 # Components Overview
 ## Fastify Server
@@ -133,13 +121,13 @@ Tracks which client socket belongs to which orderId.
 # Postman 
 
 ## Example Body
-
+```
 {
   "tokenIn": "SOL",
   "tokenOut": "USDC",
   "amountIn": 5
 }
-
+```
 ## How to use
 
 Import the collection into Postman or Insomnia.
@@ -151,13 +139,13 @@ Select the environment from the dropdown.
 Run the request POST /api/orders/execute:
 
 ## Example body
-
+```
 {
   "tokenIn": "SOL",
   "tokenOut": "USDC",
   "amountIn": 5
 }
-
+```
 ## WebSocket Testing in Postman
 
 1. Click New → WebSocket Request
@@ -168,9 +156,83 @@ ws://localhost:3000/api/orders/upgrade/{{orderId}}
 3. Click Connect
 
 4. Submit the order again — you should see messages like:
-
+```
 {"status":"pending", ...}
 {"status":"routing", ...}
 {"status":"building", ...}
 {"status":"submitted", ...}
 {"status":"confirmed", ...}
+```
+## Running the system locally
+
+1. Prerequisites: Node, PostgresSQL, Redis
+
+2. Clone the repo
+
+3. ```npm install```
+4. ```redis-server```
+5. ```createdb order_exec_engine```
+6. ```psql order_exec_engine```
+7. Create a ```.env ``` in project root:
+   ```NODE_ENV=development
+      PORT=3000
+
+      DATABASE_URL=postgresql://localhost/order_exec_engine
+      REDIS_URL=redis://127.0.0.1:6379
+
+      DEX_MODE=mock
+      JWT_SECRET=dev_secret
+   ```
+8. ```npm run build```
+9. Run the server ```npm run dev```, it will start at: ```http://localhost:3000```
+10. ```npm run worker:dev```
+11. Browser client is at ```http://localhost:3000/client.html```, can the updates live
+
+## API usage
+
+1. Submit order: POST ```/api/orders/execute```
+
+   ```
+   {
+     "tokenIn": "SOL",
+     "tokenOut": "USDC",
+     "amount": 5
+   }
+   ```
+2. Websocket stream: ```ws://localhost:3000/api/orders/upgrade/<orderId>```
+   Example:
+   ```
+   {"status":"pending"}
+   {"status":"routing"}
+   {"status":"building"}
+   {"status":"submitted"}
+   {"status":"confirmed","txHash":"0xabc..."}
+   ```
+
+## Components Overview
+
+### Fastify Server
+1. REST API handling
+
+2. WebSocket upgrade handling
+
+3. Static client serving
+
+4. DB polling for lifecycle updates
+
+## MockDexRouter
+1. Simulated quotes
+
+2. Price variance
+
+3. Execution delay
+
+4. Mock transaction hash
+
+## Worker (BullMQ)
+
+1. Concurrent processing (concurrency = 10)
+
+2. Exponential backoff retries
+
+3. Lifecycle persistence to PostgreSQL
